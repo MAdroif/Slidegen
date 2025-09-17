@@ -215,7 +215,7 @@
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({ script }),
-                        signal: controller.signal
+                        signal: controller.signal,
                     });
                     clearTimeout(timeoutId);
 
@@ -249,12 +249,12 @@
                 //} catch (error) {
                 //    console.error('Error during slide generation:', error);
                 //    showError(error.message);
-                } catch (error) {
-                  if (error.name === 'AbortError') {
-                    showError('Request timeout');
-                } finally {
-                    showLoading(false);
-                } 
+                    } catch (error) {
+                      if (error.name === 'AbortError') {
+                        showError('Request timeout');
+                    } finally {
+                        showLoading(false);
+                    } 
                 
             };
 
@@ -319,8 +319,8 @@
             downloadBtn.addEventListener('click', handleDownloadSlides);
 
             // Show loading
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('generate-btn').disabled = true;
+            // document.getElementById('loading').style.display = 'block';
+            // document.getElementById('generate-btn').disabled = true;
             
             // After response
             document.getElementById('loading').style.display = 'none';
