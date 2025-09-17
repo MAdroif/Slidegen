@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carousel Slide Generator</title>
+    
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- html2canvas for converting HTML elements to images -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- JSZip for creating ZIP files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Custom CSS for a cleaner look and better UX */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+        }
+
+        /* Styling for the preview area's horizontal scrollbar */
+        .preview-area::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .preview-area::-webkit-scrollbar-track {
+            background: #e0e7ff;
+            border-radius: 10px;
+        }
+
+        .preview-area::-webkit-scrollbar-thumb {
+            background: #4f46e5;
+            border-radius: 10px;
+        }
+
+        .preview-area::-webkit-scrollbar-thumb:hover {
+            background: #4338ca;
+        }
+        
+        /* Base styles for slides that will be populated by the API response */
+        .preview-area {
+            display: flex;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        /* This is a placeholder style. The actual slide style will come from the API */
+        .slide {
+            flex: 0 0 90%;
+            max-width: 90%;
+            height: 360px; /* Example height */
+            scroll-snap-align: center;
+            border-radius: 12px;
+            background-color: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            color: #6b7280;
+            border: 1px solid #e5e7eb;
+        }
+
+        @media (min-width: 768px) {
+            .slide {
+                flex: 0 0 450px; /* Fixed width on larger screens */
+                max-width: 450px;
+            }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Carousel Slide Generator</h1>
+            <p class="text-gray-600 mt-2">Masukkan skrip Anda di bawah untuk membuat slide carousel secara otomatis.</p>
+        </header>
+
+        <main class="bg-white rounded-2xl shadow-xl p-6 md:p-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- Input Section -->
+                <div class="flex flex-col">
+                    <label for="script-input" class="text-lg font-semibold mb-2 text-gray-700">Skrip Konten</label>
+                    <textarea id="script-input" rows="15" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200" placeholder="Contoh:&#10;Slide 1: Judul Utama&#10;--&#10;Slide 2: Poin pertama...&#10;--&#10;Slide 3: Kesimpulan"></textarea>
+                    
+                    <div class="mt-6 flex flex-col sm:flex-row gap-4">
+                        <button id="generate-btn" class="w-full sm:w-auto flex-1 bg-indigo-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200 flex items-center justify-center">
+                            <svg id="generate-icon" class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                            <svg id="loading-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span id="generate-btn-text">Generate Slides</span>
+                        </button>
+                        <button id="download-btn" class="w-full sm:w-auto flex-1 bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center" disabled>
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            <span id="download-btn-text">Download PNG</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preview Section -->
+                <div class="relative min-h-[400px] bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-center">
+                    <div id="error-message" class="hidden text-center text-red-600 p-4">
+                        <h3 class="font-bold">Oops! Terjadi Kesalahan</h3>
+                        <p id="error-text"></p>
+                    </div>
+                    
+                    <div id="preview-container" class="w-full h-full">
+                         <div class="preview-area h-full">
+                            <div class="slide">
+                                <p>Preview akan muncul di sini</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="preview-loader" class="absolute inset-0 bg-white/70 backdrop-blur-sm rounded-lg items-center justify-center hidden">
+                        <div class="text-center">
+                             <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <p class="mt-2 text-indigo-700 font-semibold">Memproses slide...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- This style tag will be populated with CSS from the API response -->
+    <style id="dynamic-styles"></style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Element References ---
+            const scriptInput = document.getElementById('script-input');
+            const generateBtn = document.getElementById('generate-btn');
+            const downloadBtn = document.getElementById('download-btn');
+            const previewContainer = document.getElementById('preview-container');
+            const dynamicStyles = document.getElementById('dynamic-styles');
+
+            // Button and state indicators
+            const generateBtnText = document.getElementById('generate-btn-text');
+            const downloadBtnText = document.getElementById('download-btn-text');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const generateIcon = document.getElementById('generate-icon');
+            const previewLoader = document.getElementById('preview-loader');
+            const errorMessageContainer = document.getElementById('error-message');
+            const errorText = document.getElementById('error-text');
+            
+            // --- API Configuration ---
+            const N8N_WEBHOOK_URL = 'https://n8n-ukfgpxzhkrwi.sate.sumopod.my.id/webhook/slidegen';
+
+            // --- State Management Functions ---
+            const showLoading = (isLoading) => {
+                if (isLoading) {
+                    generateBtn.disabled = true;
+                    generateBtnText.textContent = 'Generating...';
+                    loadingSpinner.classList.remove('hidden');
+                    generateIcon.classList.add('hidden');
+                    previewLoader.style.display = 'flex';
+                    errorMessageContainer.classList.add('hidden');
+                } else {
+                    generateBtn.disabled = false;
+                    generateBtnText.textContent = 'Generate Slides';
+                    loadingSpinner.classList.add('hidden');
+                    generateIcon.classList.remove('hidden');
+                    previewLoader.style.display = 'none';
+                }
+            };
+            
+            const showError = (message) => {
+                previewContainer.innerHTML = '<div class="preview-area h-full"><div class="slide"><p>Preview akan muncul di sini</p></div></div>'; // Reset preview
+                errorMessageContainer.classList.remove('hidden');
+                errorText.textContent = message || 'Tidak dapat terhubung ke server. Coba lagi nanti.';
+                downloadBtn.disabled = true;
+            };
+
+            // --- Core Functions ---
+            
+            /**
+             * Handles the slide generation process by calling the N8N webhook.
+             */
+            const handleGenerateSlides = async () => {
+                const script = scriptInput.value.trim();
+                if (!script) {
+                    alert('Mohon masukkan skrip konten terlebih dahulu.');
+                    return;
+                }
+
+                showLoading(true);
+                downloadBtn.disabled = true;
+
+                try {
+                    const response = await fetch(N8N_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ script }),
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: 'Gagal memproses permintaan.' }));
+                        throw new Error(errorData.message || `HTTP error! Status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    if (result.status === 'success' && result.html && result.css) {
+                        // Inject the generated HTML and CSS
+                        previewContainer.innerHTML = result.html;
+                        dynamicStyles.innerHTML = result.css;
+                        
+                        // Enable download button if there are slides
+                        if (previewContainer.querySelector('.slide')) {
+                           downloadBtn.disabled = false;
+                        }
+                    } else {
+                        throw new Error(result.message || 'Respons dari API tidak valid.');
+                    }
+
+                } catch (error) {
+                    console.error('Error during slide generation:', error);
+                    showError(error.message);
+                } finally {
+                    showLoading(false);
+                }
+            };
+
+            /**
+             * Handles the downloading of generated slides as a ZIP file of PNG images.
+             */
+            const handleDownloadSlides = async () => {
+                const slides = previewContainer.querySelectorAll('.slide');
+                if (slides.length === 0) {
+                    alert('Tidak ada slide untuk diunduh.');
+                    return;
+                }
+
+                downloadBtn.disabled = true;
+                downloadBtnText.textContent = 'Downloading...';
+                
+                try {
+                    const zip = new JSZip();
+                    const imagePromises = [];
+
+                    slides.forEach((slide, index) => {
+                        const promise = html2canvas(slide, {
+                            scale: 2, // Increase scale for better image quality
+                            useCORS: true,
+                            backgroundColor: null,
+                        }).then(canvas => {
+                            return new Promise(resolve => {
+                                canvas.toBlob(blob => {
+                                    zip.file(`slide-${index + 1}.png`, blob);
+                                    resolve();
+                                }, 'image/png');
+                            });
+                        });
+                        imagePromises.push(promise);
+                    });
+
+                    await Promise.all(imagePromises);
+
+                    const zipBlob = await zip.generateAsync({ type: 'blob' });
+                    
+                    // Create a link and trigger download
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(zipBlob);
+                    link.download = 'carousel-slides.zip';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(link.href);
+
+                } catch (error) {
+                    console.error('Error during download:', error);
+                    alert('Gagal mengunduh slide. Silakan coba lagi.');
+                } finally {
+                    downloadBtn.disabled = false;
+                    downloadBtnText.textContent = 'Download PNG';
+                }
+            };
+
+
+            // --- Event Listeners ---
+            generateBtn.addEventListener('click', handleGenerateSlides);
+            downloadBtn.addEventListener('click', handleDownloadSlides);
+        });
+    </script>
+</body>
+</html>
