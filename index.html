@@ -249,12 +249,12 @@
                 //} catch (error) {
                 //    console.error('Error during slide generation:', error);
                 //    showError(error.message);
-                    } catch (error) {
-                      if (error.name === 'AbortError') {
-                        showError('Request timeout');
-                    } finally {
-                        showLoading(false);
-                    } 
+                } catch (error) {
+                  if (error.name === 'AbortError') {
+                    showError('Request timeout');
+                //} finally {
+                //    showLoading(false);
+                } 
                 
             };
 
