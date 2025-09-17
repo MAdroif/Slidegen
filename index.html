@@ -160,8 +160,7 @@
             const errorMessageContainer = document.getElementById('error-message');
             const errorText = document.getElementById('error-text');
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 menit
+            
             
             // --- API Configuration ---
             const N8N_WEBHOOK_URL = 'https://n8n-ukfgpxzhkrwi.sate.sumopod.my.id/webhook/slidegen';
@@ -197,6 +196,9 @@
              * Handles the slide generation process by calling the N8N webhook.
              */
             const handleGenerateSlides = async () => {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 menit
+                
                 const script = scriptInput.value.trim();
                 if (!script) {
                     alert('Mohon masukkan skrip konten terlebih dahulu.');
@@ -215,6 +217,7 @@
                         body: JSON.stringify({ script }),
                         signal: controller.signal
                     });
+                    clearTimeout(timeoutId);
 
                     if (!response.ok) {
                         const errorData = await response.json().catch(() => ({ message: 'Gagal memproses permintaan.' }));
@@ -223,25 +226,32 @@
 
                     const result = await response.json();
                     
-                    if (result.status === 'success' && result.html && result.css) {
-                        // Inject the generated HTML and CSS
-                        previewContainer.innerHTML = result.html;
-                        dynamicStyles.innerHTML = result.css;
+                    // Handle N8N array response format
+                    const data = Array.isArray(result) ? result[0] : result;
+                    
+                    if (data.script && Array.isArray(data.script)) {
+                        // Extract HTML content from script array
+                        const htmlContent = data.script[0];
                         
-                        // Enable download button if there are slides
-                        if (previewContainer.querySelector('.slide')) {
-                           downloadBtn.disabled = false;
+                        // Parse HTML and CSS from the content
+                        const htmlMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/);
+                        const cssMatch = htmlContent.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+                        
+                        if (htmlMatch && cssMatch) {
+                            previewContainer.innerHTML = htmlMatch[1];
+                            dynamicStyles.innerHTML = cssMatch[1];
+                            downloadBtn.disabled = false;
                         }
                     } else {
                         throw new Error(result.message || 'Respons dari API tidak valid.');
                     }
-                  clearTimeout(timeoutId);
-                } catch (error) {
-                    console.error('Error during slide generation:', error);
-                    showError(error.message);
+                  
+                //} catch (error) {
+                //    console.error('Error during slide generation:', error);
+                //    showError(error.message);
                 } catch (error) {
                   if (error.name === 'AbortError') {
-                    console.log('Request timeout');
+                    showError('Request timeout');
                 } finally {
                     showLoading(false);
                 } 
