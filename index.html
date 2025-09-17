@@ -159,6 +159,9 @@
             const previewLoader = document.getElementById('preview-loader');
             const errorMessageContainer = document.getElementById('error-message');
             const errorText = document.getElementById('error-text');
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 menit
             
             // --- API Configuration ---
             const N8N_WEBHOOK_URL = 'https://n8n-ukfgpxzhkrwi.sate.sumopod.my.id/webhook/slidegen';
@@ -210,6 +213,7 @@
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({ script }),
+                        signal: controller.signal
                     });
 
                     if (!response.ok) {
@@ -231,13 +235,17 @@
                     } else {
                         throw new Error(result.message || 'Respons dari API tidak valid.');
                     }
-
+                  clearTimeout(timeoutId);
                 } catch (error) {
                     console.error('Error during slide generation:', error);
                     showError(error.message);
+                } catch (error) {
+                  if (error.name === 'AbortError') {
+                    console.log('Request timeout');
                 } finally {
                     showLoading(false);
-                }
+                } 
+                
             };
 
             /**
@@ -299,6 +307,14 @@
             // --- Event Listeners ---
             generateBtn.addEventListener('click', handleGenerateSlides);
             downloadBtn.addEventListener('click', handleDownloadSlides);
+
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('generate-btn').disabled = true;
+            
+            // After response
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('generate-btn').disabled = false;
         });
     </script>
 </body>
