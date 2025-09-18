@@ -239,7 +239,7 @@
 
                 // Create abort controller for timeout handling
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
+                const timeoutId = setTimeout(() => controller.abort(), 180000); // 2 minutes
 
                 try {
                     const response = await fetch(N8N_WEBHOOK_URL, {
