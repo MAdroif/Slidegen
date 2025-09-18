@@ -82,7 +82,7 @@
 
     <div class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Carousel Slide Generator test2</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Carousel Slide Generator</h1>
             <p class="text-gray-600 mt-2">Masukkan skrip Anda di bawah untuk membuat slide carousel secara otomatis.</p>
         </header>
 
@@ -161,7 +161,7 @@
             const errorText = document.getElementById('error-text');
             
             // --- API Configuration ---
-            const N8N_WEBHOOK_URL = 'https://n8n-ukfgpxzhkrwi.sate.sumopod.my.id/webhook-test/slidegen';
+            const N8N_WEBHOOK_URL = 'https://n8n-ukfgpxzhkrwi.sate.sumopod.my.id/webhook/slidegen';
 
             // --- State Management Functions ---
             const showLoading = (isLoading) => {
@@ -239,7 +239,7 @@
 
                 // Create abort controller for timeout handling
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 300000); // 2 minutes
+                const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
 
                 try {
                     const response = await fetch(N8N_WEBHOOK_URL, {
@@ -264,34 +264,61 @@
                     // Handle N8N response format - it returns an array
                     const data = Array.isArray(result) ? result[0] : result;
                     
-                    // Check if we have the expected data structure
-                    if (data && data.script && Array.isArray(data.script) && data.script[0]) {
-                        const htmlContent = data.script[0];
+                    // Check multiple possible response formats
+                    let htmlContent = '';
+                    let cssContent = '';
+                    
+                    // Format 1: data.html and data.css (direct format)
+                    if (data && data.html && data.css) {
+                        htmlContent = data.html;
+                        cssContent = data.css;
+                    }
+                    // Format 2: data.script array (old format)
+                    else if (data && data.script && Array.isArray(data.script) && data.script[0]) {
+                        htmlContent = data.script[0];
+                        // Extract CSS from HTML
+                        const { cssContent: extractedCSS } = parseHtmlContent(htmlContent);
+                        cssContent = extractedCSS;
+                    }
+                    // Format 3: Full HTML document in response
+                    else if (data && typeof data === 'string' && data.includes('<html')) {
+                        htmlContent = data;
+                        const { cssContent: extractedCSS } = parseHtmlContent(htmlContent);
+                        cssContent = extractedCSS;
+                    }
+                    
+                    if (htmlContent) {
+                        // If it's a full HTML document, extract body content
+                        const { bodyContent } = parseHtmlContent(htmlContent);
+                        const contentToInject = bodyContent || htmlContent;
                         
-                        // Parse the HTML content to extract body and CSS
-                        const { bodyContent, cssContent } = parseHtmlContent(htmlContent);
-                        
-                        if (bodyContent) {
-                            // Inject the generated HTML and CSS
-                            previewContainer.innerHTML = bodyContent;
-                            if (cssContent) {
-                                dynamicStyles.innerHTML = cssContent;
-                            }
-                            
-                            // Enable download button if there are slides
-                            const slides = previewContainer.querySelectorAll('[id*="slide"], .slide');
-                            if (slides.length > 0) {
-                                downloadBtn.disabled = false;
-                            }
-                        } else {
-                            throw new Error('Tidak dapat menemukan konten slide dalam respons.');
+                        // Inject the generated HTML and CSS
+                        previewContainer.innerHTML = contentToInject;
+                        if (cssContent) {
+                            dynamicStyles.innerHTML = cssContent;
                         }
-                    } else if (data && data.html && data.css) {
-                        // Handle direct HTML/CSS format (backup)
-                        previewContainer.innerHTML = data.html;
-                        dynamicStyles.innerHTML = data.css;
                         
-                        if (previewContainer.querySelector('.slide')) {
+                        // Smart slide detection - look for any content div that looks like a slide
+                        const slides = previewContainer.querySelectorAll([
+                            '[id*="slide"]',
+                            '.slide', 
+                            '.slide-1, .slide-2, .slide-3, .slide-4, .slide-5, .slide-6',
+                            '.instagram-carousel > div',
+                            'div[style*="width"]',
+                            'section'
+                        ].join(', '));
+                        
+                        // Additional validation - filter out placeholder content
+                        const validSlides = Array.from(slides).filter(slide => 
+                            slide.offsetWidth > 200 && 
+                            slide.offsetHeight > 200 && 
+                            slide.textContent.trim() !== 'Preview akan muncul di sini' &&
+                            slide.textContent.trim().length > 20
+                        );
+                        
+                        console.log('Detected slides:', validSlides.length, validSlides);
+                        
+                        if (validSlides.length > 0) {
                             downloadBtn.disabled = false;
                         }
                     } else {
