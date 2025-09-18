@@ -159,8 +159,6 @@
             const previewLoader = document.getElementById('preview-loader');
             const errorMessageContainer = document.getElementById('error-message');
             const errorText = document.getElementById('error-text');
-
-            
             
             // --- API Configuration ---
             const N8N_WEBHOOK_URL = 'https://n8n-ukfgpxzhkrwi.sate.sumopod.my.id/webhook/slidegen';
@@ -190,15 +188,46 @@
                 downloadBtn.disabled = true;
             };
 
+            // --- Helper Functions ---
+            
+            /**
+             * Parse HTML content and extract body and style sections
+             */
+            const parseHtmlContent = (htmlContent) => {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = htmlContent;
+                
+                // Extract body content (everything inside <body> tag)
+                const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+                let bodyContent = '';
+                if (bodyMatch) {
+                    bodyContent = bodyMatch[1];
+                } else {
+                    // If no body tag, try to extract carousel container
+                    const containerMatch = htmlContent.match(/<div[^>]*class="carousel-container"[^>]*>([\s\S]*?)<\/div>/i);
+                    if (containerMatch) {
+                        bodyContent = containerMatch[0];
+                    }
+                }
+                
+                // Extract CSS content (everything inside <style> tags)
+                const styleMatches = htmlContent.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
+                let cssContent = '';
+                if (styleMatches) {
+                    cssContent = styleMatches.map(match => 
+                        match.replace(/<style[^>]*>|<\/style>/gi, '')
+                    ).join('\n');
+                }
+                
+                return { bodyContent, cssContent };
+            };
+
             // --- Core Functions ---
             
             /**
              * Handles the slide generation process by calling the N8N webhook.
              */
             const handleGenerateSlides = async () => {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 menit
-                
                 const script = scriptInput.value.trim();
                 if (!script) {
                     alert('Mohon masukkan skrip konten terlebih dahulu.');
@@ -208,6 +237,10 @@
                 showLoading(true);
                 downloadBtn.disabled = true;
 
+                // Create abort controller for timeout handling
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minutes
+
                 try {
                     const response = await fetch(N8N_WEBHOOK_URL, {
                         method: 'POST',
@@ -215,8 +248,9 @@
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({ script }),
-                        signal: controller.signal,
+                        signal: controller.signal
                     });
+
                     clearTimeout(timeoutId);
 
                     if (!response.ok) {
@@ -225,46 +259,71 @@
                     }
 
                     const result = await response.json();
+                    console.log('API Response:', result); // For debugging
                     
-                    // Handle N8N array response format
+                    // Handle N8N response format - it returns an array
                     const data = Array.isArray(result) ? result[0] : result;
                     
-                    if (data.script && Array.isArray(data.script)) {
-                        // Extract HTML content from script array
+                    // Check if we have the expected data structure
+                    if (data && data.script && Array.isArray(data.script) && data.script[0]) {
                         const htmlContent = data.script[0];
                         
-                        // Parse HTML and CSS from the content
-                        const htmlMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/);
-                        const cssMatch = htmlContent.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+                        // Parse the HTML content to extract body and CSS
+                        const { bodyContent, cssContent } = parseHtmlContent(htmlContent);
                         
-                        if (htmlMatch && cssMatch) {
-                            previewContainer.innerHTML = htmlMatch[1];
-                            dynamicStyles.innerHTML = cssMatch[1];
+                        if (bodyContent) {
+                            // Inject the generated HTML and CSS
+                            previewContainer.innerHTML = bodyContent;
+                            if (cssContent) {
+                                dynamicStyles.innerHTML = cssContent;
+                            }
+                            
+                            // Enable download button if there are slides
+                            const slides = previewContainer.querySelectorAll('[id*="slide"], .slide');
+                            if (slides.length > 0) {
+                                downloadBtn.disabled = false;
+                            }
+                        } else {
+                            throw new Error('Tidak dapat menemukan konten slide dalam respons.');
+                        }
+                    } else if (data && data.html && data.css) {
+                        // Handle direct HTML/CSS format (backup)
+                        previewContainer.innerHTML = data.html;
+                        dynamicStyles.innerHTML = data.css;
+                        
+                        if (previewContainer.querySelector('.slide')) {
                             downloadBtn.disabled = false;
                         }
                     } else {
-                        throw new Error(result.message || 'Respons dari API tidak valid.');
+                        throw new Error(data.message || 'Format respons dari API tidak valid.');
                     }
-                  
-                //} catch (error) {
-                //    console.error('Error during slide generation:', error);
-                //    showError(error.message);
+
                 } catch (error) {
-                  if (error.name === 'AbortError') {
-                    showError('Request timeout');
-                //} finally {
-                //    showLoading(false);
-                } 
-                
+                    console.error('Error during slide generation:', error);
+                    if (error.name === 'AbortError') {
+                        showError('Request timeout - proses terlalu lama. Silakan coba lagi.');
+                    } else {
+                        showError(error.message);
+                    }
+                } finally {
+                    showLoading(false);
+                }
             };
 
             /**
              * Handles the downloading of generated slides as a ZIP file of PNG images.
              */
             const handleDownloadSlides = async () => {
-                const slides = previewContainer.querySelectorAll('.slide');
-                if (slides.length === 0) {
-                    alert('Tidak ada slide untuk diunduh.');
+                // Look for slides with various possible selectors
+                const slides = previewContainer.querySelectorAll('[id*="slide"], .slide, .carousel-container > div');
+                const validSlides = Array.from(slides).filter(slide => 
+                    slide.offsetWidth > 0 && slide.offsetHeight > 0 && 
+                    !slide.classList.contains('download-svg') &&
+                    slide.textContent.trim() !== 'Preview akan muncul di sini'
+                );
+                
+                if (validSlides.length === 0) {
+                    alert('Tidak ada slide untuk diunduh. Silakan generate slide terlebih dahulu.');
                     return;
                 }
 
@@ -275,17 +334,20 @@
                     const zip = new JSZip();
                     const imagePromises = [];
 
-                    slides.forEach((slide, index) => {
+                    validSlides.forEach((slide, index) => {
                         const promise = html2canvas(slide, {
                             scale: 2, // Increase scale for better image quality
                             useCORS: true,
-                            backgroundColor: null,
+                            backgroundColor: '#FFFFFF',
+                            allowTaint: true,
+                            removeContainer: false,
+                            imageTimeout: 30000
                         }).then(canvas => {
                             return new Promise(resolve => {
                                 canvas.toBlob(blob => {
                                     zip.file(`slide-${index + 1}.png`, blob);
                                     resolve();
-                                }, 'image/png');
+                                }, 'image/png', 0.95);
                             });
                         });
                         imagePromises.push(promise);
@@ -298,7 +360,7 @@
                     // Create a link and trigger download
                     const link = document.createElement('a');
                     link.href = URL.createObjectURL(zipBlob);
-                    link.download = 'carousel-slides.zip';
+                    link.download = `carousel-slides-${new Date().getTime()}.zip`;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -313,18 +375,9 @@
                 }
             };
 
-
             // --- Event Listeners ---
             generateBtn.addEventListener('click', handleGenerateSlides);
             downloadBtn.addEventListener('click', handleDownloadSlides);
-
-            // Show loading
-            // document.getElementById('loading').style.display = 'block';
-            // document.getElementById('generate-btn').disabled = true;
-            
-            // After response
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('generate-btn').disabled = false;
         });
     </script>
 </body>
